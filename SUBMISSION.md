@@ -1,4 +1,4 @@
-## Honesty notes (please read before the demo)
+## Honesty notes 
 
 - The **client LLM is a deterministic mock by default** so the arena runs
   anywhere; the isolation, networking, seccomp, commit-reveal, audit and canary
