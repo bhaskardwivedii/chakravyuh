@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Chakravyuh one-command demo: build, boot the hardened arena, run a full
 # red/blue/model test through the broker, seal + verify the audit trail, and
-# print the dashboard URL. ~2 minutes. Target for the live hackathon demo.
+# print the dashboard URL. ~2 minutes. Suitable for a live walkthrough.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -26,15 +26,42 @@ echo "▶ Dashboard:  http://localhost:8000/   (metadata-only isolation view)"
 echo "▶ Running red agent (commit → attack → close → reveal) ..."
 $COMPOSE run --rm red
 
-echo "▶ Sealing and verifying the audit trail ..."
-OP=$(curl -s http://localhost:8000/token/operator | python3 -c "import sys,json;print(json.load(sys.stdin)['token'])")
-curl -s -XPOST http://localhost:8000/seal -H "x-token: $OP" >/dev/null
+echo "▶ Running canary insider-probe (measuring cross-lane leakage) ..."
+$COMPOSE --profile probe run --rm probe-red >/dev/null 2>&1 || true
+
+echo "▶ Issuing signed isolation report + verifying the audit trail ..."
+curl -s http://localhost:8000/report > /tmp/chakravyuh_report.json
 curl -s http://localhost:8000/audit/export > /tmp/chakravyuh_export.json
+
 PYTHONPATH="$PWD" python3 - <<'PY'
-import json; from common.audit import verify_chain
-r=verify_chain(json.load(open('/tmp/chakravyuh_export.json')))
-print(f"   audit: valid={r['valid']} records={r['records_checked']} "
-      f"merkle_ok={r['merkle_root_ok']} signature_ok={r['signature_ok']}")
+import json
+from common.audit import verify_chain
+from common.report import verify_report
+
+audit = verify_chain(json.load(open('/tmp/chakravyuh_export.json')))
+signed = json.load(open('/tmp/chakravyuh_report.json'))
+rep = verify_report(signed); b = signed["report"]
+
+def ok(x): return "OK" if x else "FAIL"
+print("\n" + "=" * 52)
+print("  CHAKRAVYUH — ISOLATION SCORECARD")
+print("=" * 52)
+print(f"  attacks processed .......... {b['attacks_processed']}")
+print(f"  jailbreaks blocked ......... {b['verdicts']['blocked']}/{b['attacks_processed']}"
+      f"  (block rate {b['block_rate']})")
+print(f"  canary leakage ............. {b['canary_leaks']}  (target 0)")
+print(f"  payloads commitment ........ {ok(b['payloads_commitment_verified'])}")
+print(f"  audit trail ................ {ok(audit['valid'])}"
+      f"  ({b['audit_records']} records, signed)")
+print(f"  isolation report signature . {ok(rep['valid'])}")
+print("=" * 52)
+print(f"  report hash: {signed['report_hash'][:32]}…")
+print("  (verify independently with common/report.py)")
 PY
 
-echo "▶ Done. Leave it running to explore the dashboard, or: docker compose down -v"
+echo
+echo "▶ Done. Dashboard still live at http://localhost:8000/"
+echo "  More proofs:  bash scripts/benchmark.sh   (canary: hardened vs baseline)"
+echo "                bash scripts/verify_isolation.sh   (escape primitives blocked)"
+echo "                python3 -m probes.timing_channel   (timing-channel defense)"
+echo "  Tear down:    docker compose down -v"

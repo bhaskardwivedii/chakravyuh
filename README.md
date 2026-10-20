@@ -32,10 +32,14 @@ measure** instead of a claim you have to trust.
   tokens in each lane and tries to steal them from the others. The score is the
   number recovered. **Target: 0.**
 
-**Measured result (reproducible):** the same probe suite recovers **4 canaries on
-the insecure baseline and 0 on the hardened arena**, the audit trail verifies
-end-to-end, and a denied syscall (`unshare`) is provably blocked even with full
-capabilities. See [`docs/RESULTS.md`](docs/RESULTS.md).
+**Measured results (all reproducible — see [`docs/RESULTS.md`](docs/RESULTS.md)):**
+- Canary leakage: **4 on the insecure baseline → 0 on the hardened arena.**
+- Timing side-channel: padding removes **~80%** of a secret-dependent latency
+  signal (attacker accuracy 1.00 → ~0.60).
+- Escape primitives (`unshare`, `mount`, raw socket, `ptrace`, RO-rootfs write):
+  **all blocked** while real app syscalls still work.
+- Audit trail verifies end-to-end; falsifying one field breaks the signature.
+- **35 passing tests.**
 
 ---
 
@@ -54,34 +58,27 @@ pip install -r docker/requirements.txt pytest
 PYTHONPATH=. pytest -q
 ```
 
+```bash
+# More proofs
+bash scripts/verify_isolation.sh      # escape primitives blocked in a hardened container
+python3 -m probes.timing_channel      # timing-channel defense, measured
+```
+
 Requirements: Docker + Docker Compose. Everything runs on `python:3.12-slim`;
-no GPU, no model download, no proprietary hardware. (By default a deterministic
-mock "model" is used so the arena runs anywhere; set `OLLAMA_URL` in
-`docker-compose.yml` to test a real small model such as `llama3.2:1b`.)
+no GPU, no model download, no proprietary hardware. By default a deterministic
+mock "model" is used so the arena runs anywhere; to test a **real small model**,
+run Ollama (`ollama serve` with `llama3.2:1b`) and set `OLLAMA_URL` on the
+`model` service in `docker-compose.yml` — the security layer is unchanged.
 
 ---
 
 ## Architecture
 
-Five layers — **isolate, segment, broker, record, observe**:
+Five layers — **isolate, segment, broker, record, observe**. Red has no network
+route to blue or model; every cross-lane hop goes through the broker and is
+audited.
 
-```
-   RED lane            BROKER (sole bridge)                 BLUE lane
- ┌───────────┐   ┌──────────────────────────────┐        ┌───────────┐
- │ rootless  │   │ default-deny policy (OPA-style)│       │ rootless  │
- │ seccomp   │◀─▶│ capability tokens              │◀─────▶│ seccomp   │
- │ commit    │   │ commit-reveal enforcement      │       │ verdict   │
- │ -reveal   │   │ fixed-latency padding          │       │ only      │
- └───────────┘   │ hash-chained signed audit log  │       └───────────┘
-   net-red       │ metadata-only observability    │         net-blue
-                 └───────────────┬────────────────┘
-                                 │ net-model
-                           ┌───────────┐
-                           │  MODEL    │  fresh ephemeral session per test
-                           │ (no KV    │  (no cross-test contamination)
-                           │  carryover)│
-                           └───────────┘
-```
+![Chakravyuh architecture](docs/architecture.svg)
 
 | Layer | What it does | Code |
 |-------|--------------|------|
@@ -99,17 +96,21 @@ Full requirement-by-requirement mapping to the 6 objectives and 7 verticals:
 
 ## What's novel here
 
-1. **Isolation as a tested property, not an assumption.** The canary suite gives
-   a single falsifiable number. Most isolation work asserts boundaries; we probe
-   them from the inside and report what got through.
+1. **Isolation as a tested property, not an assumption.** The canary suite and
+   the timing experiment give *falsifiable numbers* — leak count and attacker
+   accuracy. Most isolation work asserts boundaries; we probe them from the
+   inside and report what got through.
 2. **Commit-reveal for the red/blue protocol.** Red binds its corpus with a hash
    before the test and reveals it only after close — blue can't peek, red can't
    swap. This is a protocol-level fix, not just a network rule.
 3. **An audit layer that doesn't leak.** Observability is metadata-only by
    construction: the log stores payload *hashes*, never payload text (verified).
-4. **Honest, measured guarantees.** A written residual-risk model paired with a
-   reproducible leakage score — directly answering objective 06, which most
-   teams will treat as an afterthought.
+4. **A signed isolation report as the product.** Every run emits a verifiable
+   attestation (block rate, leak score, audit root, residual risk) that a third
+   party validates without trusting our code — a safety finding you can check.
+5. **Honest, measured guarantees.** A written residual-risk model paired with
+   reproducible scores — directly answering objective 06, which most teams
+   treat as an afterthought.
 
 ---
 
@@ -128,22 +129,27 @@ needed.
 
 ```
 broker/        FastAPI broker: policy engine, capability tokens, commit-reveal,
-               latency padding, audit + canary endpoints, dashboard route
-common/        audit log (hash chain + Merkle + Ed25519 + verifier), commit-reveal
+               latency padding, audit + canary + signed-report endpoints, dashboard
+common/        audit log (hash chain + Merkle + Ed25519 + verifier), commit-reveal,
+               signed isolation report (sign + independent verify)
 lanes/         model (ephemeral sessions), blue (guard/scorer), red (attack agent)
-probes/        canary insider-probe suite (network/fs/env/process channels)
+probes/        canary insider-probe suite + timing-channel experiment
 dashboard/     single-file metadata-only isolation dashboard
 docker/        Dockerfile, requirements, entrypoint, seccomp profile (+ empirical set)
-scripts/       demo.sh (one-command demo), benchmark.sh (leakage benchmark)
-tests/         31 pytest cases: audit, commit-reveal, policy, tokens, padding, e2e
-docs/          OBJECTIVES.md, THREAT_MODEL.md, RESULTS.md, DEMO.md
+scripts/       demo.sh (demo + signed scorecard), benchmark.sh (leakage),
+               verify_isolation.sh (escape primitives blocked)
+tests/         35 pytest cases: audit, commit-reveal, policy, tokens, padding,
+               timing channel, signed report, e2e
+docs/          OBJECTIVES.md, THREAT_MODEL.md, RESULTS.md, architecture.svg
 docker-compose.yml           hardened arena
 docker-compose.insecure.yml  insecure baseline (for the benchmark)
 ```
 
 ## Team
 
-**Team Chakravyuh** 
+**Team Chakravyuh** — Hack in Hills '26, Track 04 (Bayora). Two workstreams:
+container isolation, networking and audit backend; dashboard, UX and
+threat-model research.
 
 ## Security note
 

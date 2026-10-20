@@ -35,8 +35,15 @@ class LatencyPadder:
         self.stats = PaddingStats()
 
     async def pad(self, started_at: float) -> float:
-        """Await until elapsed time is a multiple of the quantum. Returns pad ms."""
+        """Await until elapsed time is a multiple of the quantum. Returns pad ms.
+
+        A quantum <= 0 disables padding (used as the 'off' baseline in the
+        timing-channel experiment); the real latency then passes through.
+        """
         elapsed_ms = (time.perf_counter() - started_at) * 1000.0
+        if self.quantum_ms <= 0:
+            self.stats.requests += 1
+            return 0.0
         # round up to the next quantum boundary
         target = (int(elapsed_ms // self.quantum_ms) + 1) * self.quantum_ms
         pad_ms = max(0.0, target - elapsed_ms)

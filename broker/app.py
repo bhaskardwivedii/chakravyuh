@@ -250,6 +250,55 @@ async def audit_export():
     return audit.export()
 
 
+@app.get("/report")
+async def isolation_report():
+    """
+    Emit a signed **isolation attestation** — the product's actual deliverable.
+
+    It bundles, for the current test, the results that matter to a safety
+    finding (block rate, measured cross-lane canary leakage, the audit Merkle
+    root) plus an explicit residual-risk statement, and signs the whole bundle
+    with the audit key. Anyone can recompute the hash and verify the signature
+    with `common/report.py`, so a third party can trust the finding without
+    trusting us. This is what makes a safety result independently defensible.
+    """
+    seal_info = audit.seal()
+    total = max(1, state.verdicts["blocked"] + state.verdicts["allowed"])
+    cr = state.canary_report or {}
+    body = {
+        "arena": "chakravyuh",
+        "test_id": state.test_id,
+        "model_session": state.model_session,
+        "attacks_processed": len(state.results),
+        "block_rate": round(state.verdicts["blocked"] / total, 3),
+        "verdicts": state.verdicts,
+        "canary_leaks": cr.get("leaks_found"),
+        "canary_probes": cr.get("probes_run"),
+        "payloads_commitment_verified": bool(state.commitment and state.commitment.revealed),
+        "audit_merkle_root": seal_info["merkle_root"],
+        "audit_records": seal_info["sealed_through_seq"] + 1,
+        "latency_quantum_ms": padder.quantum_ms,
+        "protects_against": [
+            "cross-lane payload/logic/weight leakage (network, fs, env, process)",
+            "early payload disclosure to blue (commit-reveal)",
+            "cross-test model contamination (ephemeral sessions)",
+            "audit tampering (hash chain + signed Merkle root)",
+        ],
+        "does_not_protect_against": [
+            "shared host kernel / container-runtime 0-days",
+            "microarchitectural side channels on shared CPU/GPU",
+            "a malicious host operator or root",
+        ],
+    }
+    from common.report import sign_report
+    signed = sign_report(body, audit._key)
+    signed["public_key"] = audit.public_key_hex
+    audit.append("operator", "report_issued",
+                 {"test_id": state.test_id, "report_hash": signed["report_hash"][:16]})
+    feed("report", block_rate=body["block_rate"], canary_leaks=body["canary_leaks"])
+    return signed
+
+
 # --------------------------------------------------------------------------- #
 # Canary leak report ingestion (probes POST their findings here)
 # --------------------------------------------------------------------------- #
