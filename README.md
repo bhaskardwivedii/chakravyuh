@@ -143,8 +143,7 @@ docker-compose.insecure.yml  insecure baseline (for the benchmark)
 
 ## Team
 
-**Team Chakravyuh** — Bhaskar Dwivedi (container isolation, network & audit
-backend) · Nandani Gupta (dashboard & UX, threat-model research & pitch).
+**Team Chakravyuh** 
 
 ## Security note
 
