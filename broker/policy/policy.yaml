@@ -1,0 +1,65 @@
+# Chakravyuh broker policy (policy-as-code).
+#
+# Model: DEFAULT DENY. A request is permitted only if one allow rule matches
+# every constraint it sets. Unset fields are wildcards. This is the self-contained
+# equivalent of the Rego policy documented in docs/THREAT_MODEL.md.
+#
+# Phases: commit -> open -> running -> closed
+# Subjects (lanes): red, blue, model, operator
+# Capabilities are minted by the broker as short-lived tokens (see tokens.py).
+
+allow:
+  # Red may register a payload COMMITMENT (hash only) before a test opens.
+  - name: red-commit
+    subject: red
+    action: commit
+    target: broker
+    phase: commit
+    requires_capability: red.commit
+
+  # During a running test, red may send an attack THROUGH the broker to the model.
+  # It may never address the blue lane directly.
+  - name: red-attack-model
+    subject: red
+    action: attack
+    target: model
+    phase: running
+    requires_capability: red.attack
+
+  # The model's response is routed to the blue guard for scoring, then back.
+  # Only the broker performs this hop; lanes cannot.
+  - name: broker-route-guard
+    subject: broker
+    action: route
+    target: blue
+    phase: running
+
+  # Blue returns a verdict (allow/block + reason) to the broker. Blue never
+  # receives the raw payload corpus, only the single in-flight prompt.
+  - name: blue-verdict
+    subject: blue
+    action: verdict
+    target: broker
+    phase: running
+    requires_capability: blue.verdict
+
+  # Red reveals (nonce, payloads) only AFTER the test has closed.
+  - name: red-reveal
+    subject: red
+    action: reveal
+    target: broker
+    phase: closed
+    requires_capability: red.reveal
+
+  # Operator may open/close tests and trigger canary probes + sealing.
+  - name: operator-control
+    subject: operator
+    action: [open_test, close_test, canary, seal]
+    target: broker
+    requires_capability: operator.control
+
+# Everything not listed above is denied. Notable explicit non-rules:
+#   * red -> blue (any)         : no rule  => denied (red cannot probe blue logic)
+#   * blue -> red (any)         : no rule  => denied (blue cannot read payloads)
+#   * red -> model in phase!=running : denied (no early/late attacks)
+#   * any -> secrets store      : denied (secrets never cross the broker)

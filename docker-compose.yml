@@ -1,0 +1,121 @@
+# Chakravyuh — HARDENED arena.
+#
+# Isolation enforced here (maps to objectives 01/02/04, verticals 1-3):
+#   * Micro-segmented networks: each lane shares an INTERNAL network only with
+#     the broker. Red cannot route to blue or model; they share no network.
+#   * The broker is the single bridge (sits on every lane network + the public
+#     one that exposes the dashboard).
+#   * Per-lane secret volumes: no lane can mount another lane's /secrets.
+#   * Rootless-friendly: every service runs as non-root UID 10001, drops ALL
+#     capabilities, runs read-only with no-new-privileges and a seccomp profile,
+#     and is capped on pids/cpu/memory (resource governance, vertical 5).
+#
+# Build note: pass BASE=chakravyuh-base:local when Docker Hub is unreachable.
+#   docker compose build --build-arg BASE=${BASE:-python:3.12-slim}
+
+x-hardening: &hardening
+  read_only: true
+  security_opt:
+    - no-new-privileges:true
+    - seccomp:./docker/seccomp/chakravyuh.json
+  cap_drop: [ALL]
+  user: "10001:10001"
+  pids_limit: 128
+  mem_limit: 512m
+  cpus: 0.75
+  tmpfs:
+    - /tmp:size=32m,mode=1777
+  restart: "no"
+
+services:
+  broker:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      args: {BASE: "${BASE:-python:3.12-slim}"}
+    image: chakravyuh:latest
+    <<: *hardening
+    environment:
+      LANE: broker
+      AUDIT_DB: /data/audit.db
+      MODEL_URL: http://model:9000
+      BLUE_URL: http://blue:9100
+      LATENCY_QUANTUM_MS: "50"
+      BROKER_SECRET: "${BROKER_SECRET:-dev-broker-secret-change-me}"
+    command: ["python3","-m","uvicorn","broker.app:app","--host","0.0.0.0","--port","8000"]
+    volumes:
+      - audit-data:/data
+    networks: [net-red, net-blue, net-model, net-public]
+    ports:
+      - "8000:8000"      # dashboard + operator API (public lane only)
+    healthcheck:
+      test: ["CMD","python3","-c","import urllib.request;urllib.request.urlopen('http://localhost:8000/healthz')"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+
+  model:
+    image: chakravyuh:latest
+    <<: *hardening
+    environment:
+      LANE: model
+      # OLLAMA_URL: http://ollama:11434   # uncomment to use a real small model
+    command: ["python3","-m","uvicorn","lanes.model.server:app","--host","0.0.0.0","--port","9000"]
+    volumes:
+      - model-secrets:/secrets
+    networks: [net-model]          # reachable ONLY from the broker
+
+  blue:
+    image: chakravyuh:latest
+    <<: *hardening
+    environment:
+      LANE: blue
+    command: ["python3","-m","uvicorn","lanes.blue.server:app","--host","0.0.0.0","--port","9100"]
+    volumes:
+      - blue-secrets:/secrets
+    networks: [net-blue]           # reachable ONLY from the broker
+
+  red:
+    image: chakravyuh:latest
+    <<: *hardening
+    environment:
+      LANE: red
+      BROKER_URL: http://broker:8000
+    command: ["python3","-m","lanes.red.agent"]
+    volumes:
+      - red-secrets:/secrets
+    networks: [net-red]            # can reach the broker only
+    depends_on:
+      broker:
+        condition: service_healthy
+
+  # --- canary probes (run on demand: `docker compose --profile probe run ...`) ---
+  probe-red:
+    image: chakravyuh:latest
+    <<: *hardening
+    profiles: [probe]
+    environment: {LANE: red, BROKER_URL: "http://broker:8000"}
+    command: ["python3","-m","probes.canary","--self","red","--targets","blue,model"]
+    volumes: [red-secrets:/secrets]
+    networks: [net-red]
+
+  probe-blue:
+    image: chakravyuh:latest
+    <<: *hardening
+    profiles: [probe]
+    environment: {LANE: blue, BROKER_URL: "http://broker:8000"}
+    command: ["python3","-m","probes.canary","--self","blue","--targets","red,model"]
+    volumes: [blue-secrets:/secrets]
+    networks: [net-blue]
+
+networks:
+  net-red:    {internal: true}
+  net-blue:   {internal: true}
+  net-model:  {internal: true}
+  net-public: {}
+
+volumes:
+  audit-data:
+  red-secrets:
+  blue-secrets:
+  model-secrets:

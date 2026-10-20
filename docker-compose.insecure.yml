@@ -1,0 +1,59 @@
+# Chakravyuh — INSECURE BASELINE (the "shared Docker sandbox" Bayora starts from).
+#
+# This is the status quo the Track 04 problem statement describes: red, blue and
+# the model share ONE flat network and ONE shared secrets mount, run as root
+# with full capabilities and no seccomp. It exists so the canary benchmark can
+# show a measured before/after: run the probes against this and they recover
+# other lanes' canaries (network + filesystem leaks); run them against the
+# hardened arena and they recover none.
+#
+#   docker compose -f docker-compose.insecure.yml up        # start arena
+#   docker compose -f docker-compose.insecure.yml --profile probe run probe-red
+
+services:
+  broker:
+    build: {context: ., dockerfile: docker/Dockerfile, args: {BASE: "${BASE:-python:3.12-slim}"}}
+    image: chakravyuh:latest
+    environment:
+      LANE: broker
+      AUDIT_DB: /data/audit.db
+      MODEL_URL: http://model:9000
+      BLUE_URL: http://blue:9100
+    command: ["python3","-m","uvicorn","broker.app:app","--host","0.0.0.0","--port","8000"]
+    volumes: [shared-secrets:/secrets, audit-data:/data]   # SHARED secrets (bad)
+    networks: [flat]
+    ports: ["8000:8000"]
+    healthcheck:
+      test: ["CMD","python3","-c","import urllib.request;urllib.request.urlopen('http://localhost:8000/healthz')"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+
+  model:
+    image: chakravyuh:latest
+    environment: {LANE: model}
+    command: ["python3","-m","uvicorn","lanes.model.server:app","--host","0.0.0.0","--port","9000"]
+    volumes: [shared-secrets:/secrets]                     # SHARED secrets (bad)
+    networks: [flat]
+
+  blue:
+    image: chakravyuh:latest
+    environment: {LANE: blue}
+    command: ["python3","-m","uvicorn","lanes.blue.server:app","--host","0.0.0.0","--port","9100"]
+    volumes: [shared-secrets:/secrets]                     # SHARED secrets (bad)
+    networks: [flat]
+
+  probe-red:
+    image: chakravyuh:latest
+    profiles: [probe]
+    environment: {LANE: red, BROKER_URL: "http://broker:8000"}
+    command: ["python3","-m","probes.canary","--self","red","--targets","blue,model"]
+    volumes: [shared-secrets:/secrets]
+    networks: [flat]
+
+networks:
+  flat: {}                                                 # ONE flat network (bad)
+
+volumes:
+  shared-secrets:
+  audit-data:

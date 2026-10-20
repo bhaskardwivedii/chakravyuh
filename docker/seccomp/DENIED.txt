@@ -1,0 +1,39 @@
+# Dangerous syscalls denied by chakravyuh.json (default-deny also blocks
+# anything not in the allowlist; these are called out explicitly because
+# they are the escape/side-channel primitives the threat model cares about).
+acct
+add_key
+adjtimex
+bpf
+chroot
+clock_adjtime
+clock_settime
+create_module
+delete_module
+finit_module
+get_kernel_syms
+init_module
+kcmp
+kexec_file_load
+kexec_load
+keyctl
+mbind
+mount
+move_pages
+nfsservctl
+perf_event_open
+pivot_root
+process_vm_readv
+process_vm_writev
+ptrace
+quotactl
+reboot
+request_key
+set_mempolicy
+setns
+settimeofday
+swapoff
+swapon
+umount
+umount2
+unshare
