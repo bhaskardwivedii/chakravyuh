@@ -23,13 +23,16 @@ for _ in $(seq 1 30); do
 done
 
 echo "▶ Dashboard:  http://localhost:8000/   (metadata-only isolation view)"
-echo "▶ Running red agent (commit → attack → close → reveal) ..."
-$COMPOSE run --rm red
+echo "▶ Running a test: operator opens → red commits/attacks → operator closes"
+echo "  → red reveals → operator seals (separate trusted principals) ..."
+$COMPOSE up -d operator red >/dev/null
+$COMPOSE wait operator red >/dev/null 2>&1 || true
+$COMPOSE logs red 2>/dev/null | grep -E '"n_payloads"|"commitment_valid"' | tail -2 || true
 
 echo "▶ Running canary insider-probe (measuring cross-lane leakage) ..."
 $COMPOSE --profile probe run --rm probe-red >/dev/null 2>&1 || true
 
-echo "▶ Issuing signed isolation report + verifying the audit trail ..."
+echo "▶ Fetching signed isolation report + verifying the audit trail ..."
 curl -s http://localhost:8000/report > /tmp/chakravyuh_report.json
 curl -s http://localhost:8000/audit/export > /tmp/chakravyuh_export.json
 
@@ -60,8 +63,14 @@ print("  (verify independently with common/report.py)")
 PY
 
 echo
+echo "▶ Independently reconstructing the finding from the signed log ..."
+PYTHONPATH="$PWD" python3 -m common.replay /tmp/chakravyuh_export.json 2>/dev/null \
+  | sed -n '2,3p;/test /,/closed cleanly/p' | head -10
+
+echo
 echo "▶ Done. Dashboard still live at http://localhost:8000/"
-echo "  More proofs:  bash scripts/benchmark.sh   (canary: hardened vs baseline)"
-echo "                bash scripts/verify_isolation.sh   (escape primitives blocked)"
-echo "                python3 -m probes.timing_channel   (timing-channel defense)"
+echo "  More proofs:  bash scripts/benchmark.sh        (canary: hardened vs baseline)"
+echo "                bash scripts/verify_isolation.sh (escape primitives blocked)"
+echo "                python3 -m probes.timing_channel (timing-channel defense)"
+echo "                python3 -m probes.evaluate       (detection metrics at scale)"
 echo "  Tear down:    docker compose down -v"

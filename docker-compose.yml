@@ -42,6 +42,12 @@ services:
       BLUE_URL: http://blue:9100
       LATENCY_QUANTUM_MS: "50"
       BROKER_SECRET: "${BROKER_SECRET:-dev-broker-secret-change-me}"
+      # The broker holds the full key->subject map; each lane below gets only one.
+      BOOTSTRAP_KEYS: >-
+        {"red":"${RED_KEY:-dev-red-bootstrap-change-me}",
+         "blue":"${BLUE_KEY:-dev-blue-bootstrap-change-me}",
+         "operator":"${OPERATOR_KEY:-dev-operator-bootstrap-change-me}",
+         "prober":"${PROBER_KEY:-dev-prober-bootstrap-change-me}"}
     command: ["python3","-m","uvicorn","broker.app:app","--host","0.0.0.0","--port","8000"]
     volumes:
       - audit-data:/data
@@ -75,16 +81,33 @@ services:
       - blue-secrets:/secrets
     networks: [net-blue]           # reachable ONLY from the broker
 
+  # Untrusted red tenant — holds ONLY the red bootstrap key.
   red:
     image: chakravyuh:latest
     <<: *hardening
     environment:
       LANE: red
       BROKER_URL: http://broker:8000
+      BOOTSTRAP_KEY: "${RED_KEY:-dev-red-bootstrap-change-me}"
     command: ["python3","-m","lanes.red.agent"]
     volumes:
       - red-secrets:/secrets
     networks: [net-red]            # can reach the broker only
+    depends_on:
+      broker:
+        condition: service_healthy
+
+  # Trusted control plane — holds ONLY the operator bootstrap key. Separate from
+  # the red/blue tenants: it opens/closes/seals tests but cannot attack or score.
+  operator:
+    image: chakravyuh:latest
+    <<: *hardening
+    environment:
+      LANE: operator
+      BROKER_URL: http://broker:8000
+      BOOTSTRAP_KEY: "${OPERATOR_KEY:-dev-operator-bootstrap-change-me}"
+    command: ["python3","-m","lanes.operator.driver"]
+    networks: [net-public]         # control plane, not on any tenant network
     depends_on:
       broker:
         condition: service_healthy
@@ -94,7 +117,10 @@ services:
     image: chakravyuh:latest
     <<: *hardening
     profiles: [probe]
-    environment: {LANE: red, BROKER_URL: "http://broker:8000"}
+    environment:
+      LANE: red
+      BROKER_URL: "http://broker:8000"
+      PROBER_BOOTSTRAP_KEY: "${PROBER_KEY:-dev-prober-bootstrap-change-me}"
     command: ["python3","-m","probes.canary","--self","red","--targets","blue,model"]
     volumes: [red-secrets:/secrets]
     networks: [net-red]
@@ -103,7 +129,10 @@ services:
     image: chakravyuh:latest
     <<: *hardening
     profiles: [probe]
-    environment: {LANE: blue, BROKER_URL: "http://broker:8000"}
+    environment:
+      LANE: blue
+      BROKER_URL: "http://broker:8000"
+      PROBER_BOOTSTRAP_KEY: "${PROBER_KEY:-dev-prober-bootstrap-change-me}"
     command: ["python3","-m","probes.canary","--self","blue","--targets","red,model"]
     volumes: [blue-secrets:/secrets]
     networks: [net-blue]

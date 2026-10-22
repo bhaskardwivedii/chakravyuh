@@ -21,6 +21,8 @@ Maps to objectives 01-06 and verticals 1-7; see docs/OBJECTIVES.md.
 from __future__ import annotations
 
 import asyncio
+import hmac
+import json
 import os
 import time
 import uuid
@@ -50,7 +52,19 @@ LANE_CAPS = {
     "red": ["red.commit", "red.attack", "red.reveal"],
     "blue": ["blue.verdict"],
     "operator": ["operator.control"],
+    "prober": ["canary.report"],   # may only submit a canary leakage report
 }
+
+# Per-subject bootstrap keys. A caller may mint a token for subject X only if it
+# presents BOOTSTRAP_KEYS[X]. Each container is given ONLY its own key, so the
+# untrusted red tenant cannot obtain an operator or blue token. Overridable via
+# the BOOTSTRAP_KEYS env (JSON); the defaults are for local/dev use only.
+BOOTSTRAP_KEYS = json.loads(os.environ.get("BOOTSTRAP_KEYS", json.dumps({
+    "red": "dev-red-bootstrap-change-me",
+    "blue": "dev-blue-bootstrap-change-me",
+    "operator": "dev-operator-bootstrap-change-me",
+    "prober": "dev-prober-bootstrap-change-me",
+})))
 
 
 class ArenaState:
@@ -124,13 +138,29 @@ def _auth(token: str | None, subject: str, action: str, target: str) -> list[str
 
 
 # --------------------------------------------------------------------------- #
-# Token minting (a real deployment would gate this with mTLS / an identity doc;
-# here the broker mints per-lane tokens at bootstrap and lanes read their own.)
+# Token minting — gated by a per-subject BOOTSTRAP KEY.
+#
+# Previously this endpoint handed out any capability (including operator.control)
+# to anyone. Now a caller must present the bootstrap key for the subject it is
+# asking for, via the `X-Bootstrap` header. Each container is given ONLY its own
+# key (see docker-compose.yml): the red tenant holds the red key and literally
+# cannot obtain an operator or blue token, because it does not possess those
+# keys and the broker — not the caller — holds the key→capability mapping.
+#
+# In production these per-lane keys would be short-lived identity documents
+# minted by the orchestrator (or mTLS client certs); the env-injected keys here
+# are the self-contained PoC equivalent and are overridable via BOOTSTRAP_KEYS.
 # --------------------------------------------------------------------------- #
 @app.get("/token/{subject}")
-async def get_token(subject: str):
+async def get_token(subject: str, x_bootstrap: str | None = Header(default=None)):
     if subject not in LANE_CAPS:
         raise HTTPException(404, "unknown subject")
+    expected = BOOTSTRAP_KEYS.get(subject)
+    if not expected or not x_bootstrap or not hmac.compare_digest(x_bootstrap, expected):
+        audit.append("broker", "token_denied", {"subject": subject})
+        feed("token_denied", subject=subject)
+        raise HTTPException(401, "missing or invalid bootstrap key for this subject")
+    audit.append("broker", "token_issued", {"subject": subject})
     return {"token": issuer.issue(subject, LANE_CAPS[subject])}
 
 
@@ -261,8 +291,13 @@ async def isolation_report():
     with the audit key. Anyone can recompute the hash and verify the signature
     with `common/report.py`, so a third party can trust the finding without
     trusting us. This is what makes a safety result independently defensible.
+
+    Read-only: it signs the report over the CURRENT audit Merkle root but does
+    NOT persist a new seal — persisting a seal is an authenticated operator
+    action (`POST /seal`), so this public endpoint cannot mutate the log.
     """
-    seal_info = audit.seal()
+    from common.audit import merkle_root
+    current_root = merkle_root(audit.all_hashes())
     total = max(1, state.verdicts["blocked"] + state.verdicts["allowed"])
     cr = state.canary_report or {}
     body = {
@@ -275,8 +310,8 @@ async def isolation_report():
         "canary_leaks": cr.get("leaks_found"),
         "canary_probes": cr.get("probes_run"),
         "payloads_commitment_verified": bool(state.commitment and state.commitment.revealed),
-        "audit_merkle_root": seal_info["merkle_root"],
-        "audit_records": seal_info["sealed_through_seq"] + 1,
+        "audit_merkle_root": current_root,
+        "audit_records": len(audit.all_hashes()),
         "latency_quantum_ms": padder.quantum_ms,
         "protects_against": [
             "cross-lane payload/logic/weight leakage (network, fs, env, process)",
@@ -293,8 +328,6 @@ async def isolation_report():
     from common.report import sign_report
     signed = sign_report(body, audit._key)
     signed["public_key"] = audit.public_key_hex
-    audit.append("operator", "report_issued",
-                 {"test_id": state.test_id, "report_hash": signed["report_hash"][:16]})
     feed("report", block_rate=body["block_rate"], canary_leaks=body["canary_leaks"])
     return signed
 
@@ -304,7 +337,9 @@ async def isolation_report():
 # --------------------------------------------------------------------------- #
 @app.post("/canary/report")
 async def canary_report(report: dict, x_token: str | None = Header(default=None)):
-    _auth(x_token, "operator", "canary", "broker")
+    # A least-privilege 'prober' principal may submit a leakage report and
+    # nothing else — it cannot open tests, attack, or read the audit key.
+    _auth(x_token, "prober", "canary", "broker")
     state.canary_report = report
     audit.append("operator", "canary_report",
                  {"leaks": report.get("leaks_found"),

@@ -38,8 +38,14 @@ measure** instead of a claim you have to trust.
   signal (attacker accuracy 1.00 → ~0.60).
 - Escape primitives (`unshare`, `mount`, raw socket, `ptrace`, RO-rootfs write):
   **all blocked** while real app syscalls still work.
-- Audit trail verifies end-to-end; falsifying one field breaks the signature.
-- **35 passing tests.**
+- At-scale evaluation over an adversarial corpus: **0% false positives**, and the
+  arena surfaces a real guard gap — obfuscated/evasion attacks slip through while
+  jailbreak/injection are caught.
+- Access control: per-subject bootstrap keys — the untrusted red tenant **cannot
+  mint an operator token** (verified: 401).
+- Audit trail verifies end-to-end and a finding is **reconstructed from the
+  signed log**; falsifying one field breaks the signature.
+- **41 passing tests.**
 
 ---
 
@@ -105,10 +111,14 @@ Full requirement-by-requirement mapping to the 6 objectives and 7 verticals:
    swap. This is a protocol-level fix, not just a network rule.
 3. **An audit layer that doesn't leak.** Observability is metadata-only by
    construction: the log stores payload *hashes*, never payload text (verified).
-4. **A signed isolation report as the product.** Every run emits a verifiable
-   attestation (block rate, leak score, audit root, residual risk) that a third
-   party validates without trusting our code — a safety finding you can check.
-5. **Honest, measured guarantees.** A written residual-risk model paired with
+4. **A signed isolation report + replayable findings.** Every run emits a
+   verifiable attestation (block rate, leak score, audit root, residual risk),
+   and any finding can be *reconstructed from the signed log alone* — the exact
+   "independently reconstructed" bar objective 03 sets.
+5. **Evaluated at scale, not on toy prompts.** A corpus-based harness reports
+   attack-success / block / false-positive rates and surfaces where the defence
+   actually fails (obfuscated attacks) — which is the point of a red/blue loop.
+6. **Honest, measured guarantees.** A written residual-risk model paired with
    reproducible scores — directly answering objective 06, which most teams
    treat as an afterthought.
 
@@ -128,18 +138,20 @@ needed.
 ## Repository layout
 
 ```
-broker/        FastAPI broker: policy engine, capability tokens, commit-reveal,
+broker/        FastAPI broker: policy engine, bootstrap-gated tokens, commit-reveal,
                latency padding, audit + canary + signed-report endpoints, dashboard
 common/        audit log (hash chain + Merkle + Ed25519 + verifier), commit-reveal,
-               signed isolation report (sign + independent verify)
-lanes/         model (ephemeral sessions), blue (guard/scorer), red (attack agent)
-probes/        canary insider-probe suite + timing-channel experiment
+               signed isolation report, audit replay (reconstruct a finding)
+lanes/         model (ephemeral sessions), blue (guard/scorer), red (attack tenant),
+               operator (trusted control plane — opens/closes/seals)
+probes/        canary insider-probe suite, timing-channel experiment, at-scale
+               evaluation harness + labelled corpus
 dashboard/     single-file metadata-only isolation dashboard
 docker/        Dockerfile, requirements, entrypoint, seccomp profile (+ empirical set)
-scripts/       demo.sh (demo + signed scorecard), benchmark.sh (leakage),
+scripts/       demo.sh (demo + signed scorecard + replay), benchmark.sh (leakage),
                verify_isolation.sh (escape primitives blocked)
-tests/         35 pytest cases: audit, commit-reveal, policy, tokens, padding,
-               timing channel, signed report, e2e
+tests/         41 pytest cases: audit, commit-reveal, policy, tokens, padding,
+               timing channel, signed report, token gating, evaluation, replay, e2e
 docs/          OBJECTIVES.md, THREAT_MODEL.md, RESULTS.md, architecture.svg
 docker-compose.yml           hardened arena
 docker-compose.insecure.yml  insecure baseline (for the benchmark)

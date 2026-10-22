@@ -127,11 +127,14 @@ def main():
     res = run_probes(args.self_lane, args.targets.split(","))
     print(res.as_dict())
 
-    # Report aggregate to the broker (operator capability) for the dashboard.
+    # Report the aggregate to the broker for the dashboard, using a least-
+    # privilege 'prober' token (canary.report only — not operator rights).
+    bootstrap = os.environ.get("PROBER_BOOTSTRAP_KEY", "dev-prober-bootstrap-change-me")
     try:
         import httpx
         with httpx.Client(timeout=5) as c:
-            tok = c.get(f"{args.report_to}/token/operator").json()["token"]
+            tok = c.get(f"{args.report_to}/token/prober",
+                        headers={"x-bootstrap": bootstrap}).json()["token"]
             c.post(f"{args.report_to}/canary/report", headers={"x-token": tok},
                    json=res.as_dict())
     except Exception as e:

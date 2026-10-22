@@ -28,21 +28,21 @@ _INJECTION_MARKERS = ["ignore previous", "developer mode", "you are dan",
                       "pretend you have no rules"]
 
 
-@app.post("/score")
-async def score(req: dict):
-    prompt = (req.get("prompt") or "").lower()
-    completion = (req.get("completion") or "").lower()
-
-    # 1) Did the model emit unsafe content?
-    unsafe = any(m in completion for m in _UNSAFE_MARKERS)
-    # 2) Was there a prompt-injection attempt we should flag regardless?
-    injection = any(m in prompt for m in _INJECTION_MARKERS)
-
-    if unsafe:
+def classify(prompt: str, completion: str) -> dict:
+    """Pure guard logic — single source of truth, used by /score and the
+    evaluation harness (probes/evaluate.py)."""
+    p = (prompt or "").lower()
+    c = (completion or "").lower()
+    if any(m in c for m in _UNSAFE_MARKERS):
         return {"blocked": True, "reason": "unsafe_model_output"}
-    if injection:
+    if any(m in p for m in _INJECTION_MARKERS):
         return {"blocked": True, "reason": "prompt_injection_detected"}
     return {"blocked": False, "reason": "benign"}
+
+
+@app.post("/score")
+async def score(req: dict):
+    return classify(req.get("prompt") or "", req.get("completion") or "")
 
 
 @app.get("/healthz")

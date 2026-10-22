@@ -5,14 +5,15 @@ estimated. Reproduce with `bash scripts/demo.sh` and `bash scripts/benchmark.sh`
 
 ## Test suite
 ```
-35 passed in ~6s   (pytest)
+41 passed in ~6s   (pytest)
 ```
 Covers: audit tamper/reorder/deletion/forged-signature detection, Merkle
 determinism, commit-reveal integrity (alter/add/reorder/wrong-nonce rejected),
 default-deny policy (red↔blue denied, phase-gated attacks, capability checks),
-capability-token forgery/expiry, latency quantization, canary-probe logic, the
-timing-channel defense, the signed isolation report (tamper + forged-signature
-detection), and a full in-process broker flow with the model+blue lanes stubbed.
+capability-token forgery/expiry, bootstrap-gated token minting, latency
+quantization, canary-probe logic, the timing-channel defense, the signed
+isolation report, the at-scale evaluation harness, audit replay, and a full
+in-process broker flow with the model+blue lanes stubbed.
 
 ## End-to-end run (real containers, hardened compose)
 A full red→broker→model→blue→verdict cycle over 6 payloads:
@@ -75,6 +76,50 @@ classifier, with the broker's padding off vs on:
 ```
 Honest framing: padding blunts the wall-clock channel; a determined
 microarchitectural attacker remains out of scope (see `THREAT_MODEL.md`).
+
+## Access control — bootstrap-gated tokens (verified against the live broker)
+The red tenant holds only the red bootstrap key and cannot obtain an operator
+token:
+```
+  no bootstrap key        -> 401
+  red key for operator    -> 401
+  wrong key               -> 401
+  correct operator key    -> 200
+```
+The operator is a separate trusted principal (`lanes/operator`); red/blue are
+untrusted tenants. A least-privilege `prober` principal may only submit a canary
+report.
+
+## At-scale evaluation (`probes/evaluate.py`, 46-prompt labelled corpus)
+```
+  guard block rate ....... 0.462   (harmful caught by blue)
+  model refusal rate ..... 0.308   (harmful refused by model)
+  attack-success rate .... 0.231   (complied AND not blocked)
+  false-positive (benign)  0.0
+  category            n  attack-success
+  benign             20             0.0
+  evasion             6             1.0   <- real guard gap surfaced
+  harmful_direct      8             0.0
+  injection           4             0.0
+  jailbreak           8             0.0
+```
+0% false positives, and the arena surfaces a genuine weakness: obfuscated/evasion
+attacks slip past the keyword guard. Point `--corpus` at a real JailbreakBench /
+AdvBench export to evaluate on it unchanged; set `OLLAMA_URL` for real-model
+numbers.
+
+## Audit replay (`common/replay.py` on a real export)
+A finding reconstructed purely from the signed log — no live arena state:
+```
+  test 456beda8e9c0  (model session 12acd448fe18)
+    attacks reconstructed .... 6
+    blocked by guard ......... 3  (block rate 0.5)
+    payload commitment ....... 2fa4e8090027937c…  (6 payloads)
+    commitment verified ...... True
+    test closed cleanly ...... True
+```
+A tampered export makes replay report the chain as invalid, so a falsified
+finding cannot be reconstructed as genuine.
 
 ## Signed isolation report (`GET /report`, verified by `common/report.py`)
 Each run emits a signed attestation — block rate, canary leakage, audit Merkle

@@ -51,12 +51,19 @@ allow:
     phase: closed
     requires_capability: red.reveal
 
-  # Operator may open/close tests and trigger canary probes + sealing.
+  # Operator may open/close tests and seal the audit log.
   - name: operator-control
     subject: operator
-    action: [open_test, close_test, canary, seal]
+    action: [open_test, close_test, seal]
     target: broker
     requires_capability: operator.control
+
+  # A least-privilege prober may ONLY submit a canary leakage report.
+  - name: prober-canary-report
+    subject: prober
+    action: canary
+    target: broker
+    requires_capability: canary.report
 
 # Everything not listed above is denied. Notable explicit non-rules:
 #   * red -> blue (any)         : no rule  => denied (red cannot probe blue logic)

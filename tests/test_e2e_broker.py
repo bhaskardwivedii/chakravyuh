@@ -51,8 +51,32 @@ def client(monkeypatch):
         yield c
 
 
+# Default dev bootstrap keys (match broker/app.py BOOTSTRAP_KEYS defaults).
+_BOOTSTRAP = {
+    "red": "dev-red-bootstrap-change-me",
+    "blue": "dev-blue-bootstrap-change-me",
+    "operator": "dev-operator-bootstrap-change-me",
+    "prober": "dev-prober-bootstrap-change-me",
+}
+
+
 def _tok(client, sub):
-    return {"x-token": client.get(f"/token/{sub}").json()["token"]}
+    r = client.get(f"/token/{sub}", headers={"x-bootstrap": _BOOTSTRAP[sub]})
+    return {"x-token": r.json()["token"]}
+
+
+def test_token_requires_bootstrap_key(client):
+    # No bootstrap header -> denied.
+    assert client.get("/token/operator").status_code == 401
+    # Wrong key -> denied.
+    assert client.get("/token/operator",
+                      headers={"x-bootstrap": "wrong"}).status_code == 401
+    # The red key cannot mint an operator token (key is per-subject).
+    assert client.get("/token/operator",
+                      headers={"x-bootstrap": _BOOTSTRAP["red"]}).status_code == 401
+    # Correct key works.
+    assert client.get("/token/operator",
+                      headers={"x-bootstrap": _BOOTSTRAP["operator"]}).status_code == 200
 
 
 def test_full_flow_and_audit_verifies(client):

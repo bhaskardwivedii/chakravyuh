@@ -3,13 +3,15 @@
 BASE ?= python:3.12-slim
 export BASE
 
-.PHONY: help build demo benchmark isolation timing test up down clean
+.PHONY: help build demo benchmark isolation timing evaluate replay test up down clean
 help:
 	@echo "make build      - build the container image"
 	@echo "make demo       - one-command end-to-end demo + signed scorecard (+ dashboard :8000)"
 	@echo "make benchmark  - canary leakage: hardened vs insecure baseline"
 	@echo "make isolation  - run escape primitives in a hardened container, confirm blocked"
 	@echo "make timing     - measure the timing-channel defense (padding off vs on)"
+	@echo "make evaluate   - at-scale detection metrics over the adversarial corpus"
+	@echo "make replay     - reconstruct a finding from a signed audit export"
 	@echo "make test       - run the pytest suite (no Docker required)"
 	@echo "make up / down  - start / stop the hardened arena"
 	@echo "make clean      - stop everything and remove volumes"
@@ -19,6 +21,13 @@ isolation:
 
 timing:
 	PYTHONPATH=. python3 -m probes.timing_channel
+
+evaluate:
+	PYTHONPATH=. python3 -m probes.evaluate
+
+replay:
+	@test -f /tmp/chakravyuh_export.json || { echo "run 'make demo' first to produce an export"; exit 1; }
+	PYTHONPATH=. python3 -m common.replay /tmp/chakravyuh_export.json
 
 build:
 	docker compose build --build-arg BASE=$(BASE)
