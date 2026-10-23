@@ -1,0 +1,72 @@
+name: arena
+
+# Boots the full hardened arena in Docker, runs a red/blue/model test, the
+# canary leakage benchmark and the escape-primitive checks, then publishes the
+# run's signed report and audit log so anyone can verify them independently.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  arena:
+    name: hardened arena end-to-end
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - name: Install host-side verifier dependencies
+        run: pip install -r docker/requirements.txt
+
+      - name: Full demo (build, boot, test, seal)
+        run: bash scripts/demo.sh
+
+      - name: Verify the signed report and audit log (Python)
+        run: |
+          PYTHONPATH=. python3 - <<'PY'
+          import json, sys
+          from common.audit import verify_chain
+          from common.report import verify_report
+          audit = verify_chain(json.load(open("/tmp/chakravyuh_export.json")))
+          signed = json.load(open("/tmp/chakravyuh_report.json"))
+          rep = verify_report(signed)
+          body = signed["report"]
+          print("audit chain valid:", audit["valid"])
+          print("report signature valid:", rep["valid"])
+          print("canary leaks:", body["canary_leaks"])
+          sys.exit(0 if audit["valid"] and rep["valid"] and body["canary_leaks"] == 0 else 1)
+          PY
+
+      - name: Verify the same files with the browser verifier (Node)
+        run: node tests/verifier/check_files.js /tmp/chakravyuh_export.json /tmp/chakravyuh_report.json
+
+      - name: Upload signed report and audit log
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: chakravyuh-signed-run
+          path: |
+            /tmp/chakravyuh_report.json
+            /tmp/chakravyuh_export.json
+          if-no-files-found: warn
+
+      - name: Canary leakage benchmark (hardened vs insecure baseline)
+        run: |
+          bash scripts/benchmark.sh | tee benchmark.txt
+          grep -q -- "-> MET" benchmark.txt
+
+      - name: Escape-primitive isolation checks
+        run: bash scripts/verify_isolation.sh
+
+      - name: Tear down
+        if: always()
+        run: docker compose down -v || true

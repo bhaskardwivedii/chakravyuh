@@ -1,0 +1,30 @@
+name: tests
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  unit:
+    name: pytest + verifier tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -r docker/requirements.txt pytest
+
+      - name: Unit and integration tests (no Docker)
+        run: PYTHONPATH=. pytest -q
+
+      - name: Browser verifier matches the Python implementation
+        run: node --test tests/verifier/verify.test.js

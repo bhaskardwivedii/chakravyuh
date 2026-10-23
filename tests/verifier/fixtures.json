@@ -1,0 +1,132 @@
+{
+ "canonical": [
+  {
+   "source_ascii": "{\"quantum_ms\": 50.0, \"policy\": \"/app/broker/policy/policy.yaml\"}",
+   "source_utf8": "{\"quantum_ms\":50.0,\"policy\":\"/app/broker/policy/policy.yaml\"}",
+   "canonical": "{\"policy\":\"/app/broker/policy/policy.yaml\",\"quantum_ms\":50.0}",
+   "sha256": "5883e80de16b9f4a4a4f7a03dff9c1b157b2574af540b0865ba66c0fb04ef6c6"
+  },
+  {
+   "source_ascii": "{\"small\": 1e-05, \"big\": 1e+16, \"neg_zero\": -0.0, \"int\": 7, \"neg\": -3, \"frac\": 0.333}",
+   "source_utf8": "{\"small\":1e-05,\"big\":1e+16,\"neg_zero\":-0.0,\"int\":7,\"neg\":-3,\"frac\":0.333}",
+   "canonical": "{\"big\":1e+16,\"frac\":0.333,\"int\":7,\"neg\":-3,\"neg_zero\":-0.0,\"small\":1e-05}",
+   "sha256": "b931f716803a998d39cc33ed6c1807ee2f5fd573f6f4d901dbb07f01320e0f12"
+  },
+  {
+   "source_ascii": "{\"ts\": 1792757806.97597, \"rate\": 0.5, \"one\": 1.0}",
+   "source_utf8": "{\"ts\":1792757806.97597,\"rate\":0.5,\"one\":1.0}",
+   "canonical": "{\"one\":1.0,\"rate\":0.5,\"ts\":1792757806.97597}",
+   "sha256": "eae14006a8e1815eedfc2a51074ce2fad6430fe6a8d5bd9bec1dd67a621ea0c3"
+  },
+  {
+   "source_ascii": "{\"dash\": \"isolation \\u2014 measured\", \"accent\": \"caf\\u00e9\", \"emoji\": \"lock \\ud83d\\udd12\"}",
+   "source_utf8": "{\"dash\":\"isolation \u2014 measured\",\"accent\":\"caf\u00e9\",\"emoji\":\"lock \ud83d\udd12\"}",
+   "canonical": "{\"accent\":\"caf\\u00e9\",\"dash\":\"isolation \\u2014 measured\",\"emoji\":\"lock \\ud83d\\udd12\"}",
+   "sha256": "ae2f5f94d701f526b61b4cc572df8fd932c46f46449d0bd076259254febaf0a9"
+  },
+  {
+   "source_ascii": "{\"ctrl\": \"tab\\there\\nnew\\rcr\\bbs\\ffeed\\u0001\\u001f\\u007f\", \"q\": \"say \\\"hi\\\" \\\\ path/x\"}",
+   "source_utf8": "{\"ctrl\":\"tab\\there\\nnew\\rcr\\bbs\\ffeed\\u0001\\u001f\u007f\",\"q\":\"say \\\"hi\\\" \\\\ path/x\"}",
+   "canonical": "{\"ctrl\":\"tab\\there\\nnew\\rcr\\bbs\\ffeed\\u0001\\u001f\\u007f\",\"q\":\"say \\\"hi\\\" \\\\ path/x\"}",
+   "sha256": "2ef77c12d78709f7115102d88add8a3639117ecea217043befbc4d55fe3d7427"
+  },
+  {
+   "source_ascii": "{\"Zeta\": 1, \"alpha\": 2, \"Alpha\": 3, \"_u\": 4, \"10\": 5, \"9\": 6}",
+   "source_utf8": "{\"Zeta\":1,\"alpha\":2,\"Alpha\":3,\"_u\":4,\"10\":5,\"9\":6}",
+   "canonical": "{\"10\":5,\"9\":6,\"Alpha\":3,\"Zeta\":1,\"_u\":4,\"alpha\":2}",
+   "sha256": "b3a6ec19704fb55cf37350af01a603543e68bc193c9a8b4d10a71e6f52464d00"
+  },
+  {
+   "source_ascii": "{\"nested\": {\"b\": [1, {\"z\": null, \"a\": true}, false], \"a\": []}, \"empty\": {}}",
+   "source_utf8": "{\"nested\":{\"b\":[1,{\"z\":null,\"a\":true},false],\"a\":[]},\"empty\":{}}",
+   "canonical": "{\"empty\":{},\"nested\":{\"a\":[],\"b\":[1,{\"a\":true,\"z\":null},false]}}",
+   "sha256": "4696751f7e957139651e52e97c278e1591e8ca31423d6177f335cbd7c6524243"
+  },
+  {
+   "source_ascii": "{\"unicode_key_\\u00e9\": \"v\", \"list\": [\"\\u2028\", \"\\u00a0\", \"x\"]}",
+   "source_utf8": "{\"unicode_key_\u00e9\":\"v\",\"list\":[\"\u2028\",\"\u00a0\",\"x\"]}",
+   "canonical": "{\"list\":[\"\\u2028\",\"\\u00a0\",\"x\"],\"unicode_key_\\u00e9\":\"v\"}",
+   "sha256": "403925b79201a669c366c69de828049620a93bc06abb046880466962dd4e04ad"
+  }
+ ],
+ "merkle": [
+  {
+   "leaves": [],
+   "root": "0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  {
+   "leaves": [
+    "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9"
+   ],
+   "root": "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9"
+  },
+  {
+   "leaves": [
+    "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9",
+    "6b86b273ff34fce19d6b804eff5a3f5747ada4eaa22f1d49c01e52ddb7875b4b"
+   ],
+   "root": "b9b10a1bc77d2a241d120324db7f3b81b2edb67eb8e9cf02af9c95d30329aef5"
+  },
+  {
+   "leaves": [
+    "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9",
+    "6b86b273ff34fce19d6b804eff5a3f5747ada4eaa22f1d49c01e52ddb7875b4b",
+    "d4735e3a265e16eee03f59718b9b5d03019c07d8b6c51f90da3a666eec13ab35"
+   ],
+   "root": "4fe118c5cf4ea0fe9bd2f32fd29d788899e889a539f1850554a8b5c828c64dd4"
+  },
+  {
+   "leaves": [
+    "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9",
+    "6b86b273ff34fce19d6b804eff5a3f5747ada4eaa22f1d49c01e52ddb7875b4b",
+    "d4735e3a265e16eee03f59718b9b5d03019c07d8b6c51f90da3a666eec13ab35",
+    "4e07408562bedb8b60ce05c1decfe3ad16b72230967de01f640b7e4729b49fce"
+   ],
+   "root": "c478fead0c89b79540638f844c8819d9a4281763af9272c7f3968776b6052345"
+  },
+  {
+   "leaves": [
+    "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9",
+    "6b86b273ff34fce19d6b804eff5a3f5747ada4eaa22f1d49c01e52ddb7875b4b",
+    "d4735e3a265e16eee03f59718b9b5d03019c07d8b6c51f90da3a666eec13ab35",
+    "4e07408562bedb8b60ce05c1decfe3ad16b72230967de01f640b7e4729b49fce",
+    "4b227777d4dd1fc61c6f884f48641d02b4d121d3fd328cb08b5531fcacdabf8a"
+   ],
+   "root": "ac099a1ac20c81168ed2e93ca53f8c5e951f9f35741067df028577319aa0dea0"
+  },
+  {
+   "leaves": [
+    "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9",
+    "6b86b273ff34fce19d6b804eff5a3f5747ada4eaa22f1d49c01e52ddb7875b4b",
+    "d4735e3a265e16eee03f59718b9b5d03019c07d8b6c51f90da3a666eec13ab35",
+    "4e07408562bedb8b60ce05c1decfe3ad16b72230967de01f640b7e4729b49fce",
+    "4b227777d4dd1fc61c6f884f48641d02b4d121d3fd328cb08b5531fcacdabf8a",
+    "ef2d127de37b942baad06145e54b0c619a1f22327b2ebbcfbec78f5564afe39d"
+   ],
+   "root": "c8820058e5b32675460d44ef9e0f5e890ebaccc9dcea763491555ed2302af914"
+  },
+  {
+   "leaves": [
+    "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9",
+    "6b86b273ff34fce19d6b804eff5a3f5747ada4eaa22f1d49c01e52ddb7875b4b",
+    "d4735e3a265e16eee03f59718b9b5d03019c07d8b6c51f90da3a666eec13ab35",
+    "4e07408562bedb8b60ce05c1decfe3ad16b72230967de01f640b7e4729b49fce",
+    "4b227777d4dd1fc61c6f884f48641d02b4d121d3fd328cb08b5531fcacdabf8a",
+    "ef2d127de37b942baad06145e54b0c619a1f22327b2ebbcfbec78f5564afe39d",
+    "e7f6c011776e8db7cd330b54174fd76f7d0216b612387a5ffcfb81e6f0919683"
+   ],
+   "root": "6d42403472e18dd06c2de8021501ab86d79dec1ab4212f3aef48031ea9bb6a88"
+  }
+ ],
+ "record_hash": [
+  {
+   "source": "{\"prev\": \"0000000000000000000000000000000000000000000000000000000000000000\", \"seq\": 0, \"ts\": 1792757806.97597, \"event\": {\"actor\": \"broker\", \"action\": \"startup\", \"detail\": {\"quantum_ms\": 50.0, \"note\": \"\u2014\"}}}",
+   "hash": "8578acca9788c344033a20d4f4890e346e5132fdf09f403c884375e43869774f"
+  }
+ ],
+ "ed25519": {
+  "public_key": "ff43701d6c0fd9b36487eb24fa38a39e4fcc4bd8d1c7bc37420a22d1dd393503",
+  "message_hex": "4e07408562bedb8b60ce05c1decfe3ad16b72230967de01f640b7e4729b49fce",
+  "signature": "6634bcb3e3ef3bca0385bfde7dfd8bf282579671f7df97b4e445a5ab263227ad4171e7fe44731cb005da423e2abe3fd59ad64b95499394ed32d1d796fdadc508"
+ }
+}

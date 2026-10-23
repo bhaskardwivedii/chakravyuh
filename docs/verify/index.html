@@ -1,0 +1,309 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chakravyuh Verifier</title>
+<meta name="description" content="Independently verify a Chakravyuh audit log or signed isolation report, entirely in your browser.">
+<style>
+  :root {
+    --bg:#0b0e14; --panel:#131824; --panel2:#0f141e; --line:#232a3a; --ink:#e6eaf2; --mut:#8b95ab;
+    --ok:#3fb67a; --bad:#e5564e; --warn:#e0a53f; --accent:#5b8cff; --accent2:#9a6bff;
+    --okbg:rgba(63,182,122,.12); --badbg:rgba(229,86,78,.12); --warnbg:rgba(224,165,63,.12);
+  }
+  @media (prefers-color-scheme: light) {
+    :root { --bg:#f6f7fb; --panel:#ffffff; --panel2:#f1f3f8; --line:#e2e7ef; --ink:#121725; --mut:#5a6377;
+      --ok:#1f9d57; --bad:#c53b33; --warn:#a86a12; --accent:#2f6bff; --accent2:#7b4bff;
+      --okbg:rgba(31,157,87,.10); --badbg:rgba(197,59,51,.09); --warnbg:rgba(168,106,18,.10); }
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink);
+    font:16px/1.55 ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; }
+  .wrap { max-width:1060px; margin:0 auto; padding:0 16px 56px; }
+  header { display:flex; gap:14px; align-items:center; padding:26px 0 8px; }
+  .logo { width:40px; height:40px; border-radius:11px; flex:0 0 auto;
+    background:linear-gradient(135deg,var(--accent),var(--accent2)); }
+  h1 { font-size:22px; margin:0; letter-spacing:.2px; }
+  .sub { color:var(--mut); font-size:14px; margin:2px 0 0; }
+  h2 { font-size:13px; text-transform:uppercase; letter-spacing:.9px; color:var(--mut); margin:30px 0 12px; }
+  .grid { display:grid; gap:14px; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:16px; min-width:0; }
+  button { font:inherit; cursor:pointer; }
+  .sample { display:flex; flex-direction:column; align-items:flex-start; justify-content:flex-start;
+    text-align:left; background:var(--panel); border:1px solid var(--line); border-radius:14px;
+    padding:14px 16px; color:var(--ink); transition:border-color .15s, transform .15s; }
+  .sample:hover, .sample:focus-visible { border-color:var(--accent); transform:translateY(-1px); outline:none; }
+  .sample b { display:block; font-size:16px; }
+  .sample span { color:var(--mut); font-size:14px; }
+  .tag { display:inline-block; font-size:12px; font-weight:700; padding:2px 8px; border-radius:999px; margin-bottom:6px; }
+  .tag.ok { color:var(--ok); background:var(--okbg); } .tag.bad { color:var(--bad); background:var(--badbg); }
+  .drop { border:1.5px dashed var(--line); border-radius:14px; padding:16px; background:var(--panel2);
+    transition:border-color .15s, background .15s; min-width:0; }
+  .drop.over { border-color:var(--accent); background:var(--panel); }
+  .drop h3 { margin:0 0 2px; font-size:16px; }
+  .drop p { margin:0 0 12px; color:var(--mut); font-size:14px; }
+  .row { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+  .btn { border:1px solid var(--line); background:var(--panel); color:var(--ink); border-radius:10px; padding:8px 12px; font-size:14px; }
+  .btn.primary { background:var(--accent); border-color:var(--accent); color:#fff; }
+  .btn:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+  .file-name { color:var(--mut); font-size:13px; overflow-wrap:anywhere; }
+  textarea { width:100%; min-height:110px; margin-top:10px; background:var(--bg); color:var(--ink); border:1px solid var(--line);
+    border-radius:10px; padding:10px; font:13px/1.45 ui-monospace,SFMono-Regular,Menlo,monospace; display:none; }
+  .verdict { display:flex; gap:14px; align-items:center; border-radius:14px; padding:16px 18px; border:1px solid var(--line); }
+  .verdict.ok { background:var(--okbg); border-color:var(--ok); } .verdict.bad { background:var(--badbg); border-color:var(--bad); }
+  .verdict.warn { background:var(--warnbg); border-color:var(--warn); }
+  .verdict .big { font-size:24px; font-weight:800; letter-spacing:.4px; }
+  .verdict.ok .big { color:var(--ok); } .verdict.bad .big { color:var(--bad); } .verdict.warn .big { color:var(--warn); }
+  .verdict .msg { color:var(--ink); font-size:15px; }
+  .mark { width:34px; height:34px; border-radius:50%; flex:0 0 auto; display:grid; place-items:center; font-weight:900; color:#fff; }
+  .verdict.ok .mark { background:var(--ok); } .verdict.bad .mark { background:var(--bad); } .verdict.warn .mark { background:var(--warn); }
+  ul.checks { list-style:none; margin:10px 0 0; padding:0; }
+  ul.checks li { display:flex; gap:10px; padding:8px 0; border-top:1px solid var(--line); font-size:15px; }
+  ul.checks li:first-child { border-top:0; }
+  .i { flex:0 0 22px; height:22px; border-radius:50%; display:grid; place-items:center; font-size:13px; font-weight:900; color:#fff; margin-top:1px; }
+  .i.ok { background:var(--ok); } .i.bad { background:var(--bad); } .i.na { background:var(--mut); }
+  .small { color:var(--mut); font-size:13px; }
+  .cells { display:flex; flex-wrap:wrap; gap:4px; margin:12px 0 4px; }
+  .cell { width:16px; height:16px; border-radius:4px; background:var(--ok); opacity:.85; }
+  .cell.after { background:var(--mut); opacity:.55; } .cell.bad { background:var(--bad); opacity:1; outline:2px solid var(--bad); outline-offset:1px; }
+  .legend { display:flex; gap:14px; flex-wrap:wrap; font-size:12px; color:var(--mut); }
+  .legend i { display:inline-block; width:10px; height:10px; border-radius:3px; margin-right:5px; vertical-align:-1px; }
+  table { width:100%; border-collapse:collapse; font-size:14px; margin-top:8px; }
+  td { padding:7px 0; border-top:1px solid var(--line); vertical-align:top; }
+  td:first-child { color:var(--mut); width:46%; padding-right:10px; }
+  tr:first-child td { border-top:0; }
+  code, .mono { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:13px; overflow-wrap:anywhere; }
+  .problems { margin:10px 0 0; padding:10px 12px; border-radius:10px; background:var(--badbg); color:var(--ink); font-size:14px; }
+  .problems div { padding:3px 0; }
+  .note { border-left:3px solid var(--accent); padding:10px 14px; background:var(--panel); border-radius:0 10px 10px 0; color:var(--ink); font-size:14px; }
+  ol.how { margin:0; padding-left:20px; color:var(--ink); } ol.how li { margin:6px 0; }
+  footer { margin-top:34px; color:var(--mut); font-size:13px; }
+  a { color:var(--accent); }
+  .hidden { display:none !important; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="logo" aria-hidden="true"></div>
+    <div>
+      <h1>Chakravyuh Verifier</h1>
+      <p class="sub">Check a signed safety finding yourself. Everything runs in this browser — nothing is uploaded.</p>
+    </div>
+  </header>
+
+  <h2>Try it with a real run</h2>
+  <div class="grid">
+    <button class="sample" data-sample="genuine"><span class="tag ok">genuine</span><b>Untouched run</b><span>The log and report exactly as the arena produced them.</span></button>
+    <button class="sample" data-sample="tampered-log"><span class="tag bad">tampered</span><b>Faked verdict</b><span>One "blocked" attack quietly changed to "allowed" in the log.</span></button>
+    <button class="sample" data-sample="tampered-report"><span class="tag bad">tampered</span><b>Faked report</b><span>The report claims 5 leaks instead of 0.</span></button>
+  </div>
+
+  <h2>Or check your own files</h2>
+  <div class="grid">
+    <div class="drop" id="drop-export" data-kind="export">
+      <h3>Audit log</h3>
+      <p>JSON from <code>GET /audit/export</code></p>
+      <div class="row">
+        <label class="btn primary">Choose file<input type="file" accept=".json,application/json" hidden></label>
+        <button class="btn paste-toggle">Paste JSON</button>
+        <span class="file-name">or drop a file here</span>
+      </div>
+      <textarea aria-label="Paste audit log JSON" placeholder='{"public_key": "...", "records": [...], "seal": {...}}'></textarea>
+    </div>
+    <div class="drop" id="drop-report" data-kind="report">
+      <h3>Signed report</h3>
+      <p>JSON from <code>GET /report</code></p>
+      <div class="row">
+        <label class="btn primary">Choose file<input type="file" accept=".json,application/json" hidden></label>
+        <button class="btn paste-toggle">Paste JSON</button>
+        <span class="file-name">or drop a file here</span>
+      </div>
+      <textarea aria-label="Paste signed report JSON" placeholder='{"report": {...}, "report_hash": "...", "signature": "...", "public_key": "..."}'></textarea>
+    </div>
+  </div>
+
+  <section id="results" class="hidden" aria-live="polite">
+    <h2>Result</h2>
+    <div id="verdict" class="verdict"></div>
+    <div class="grid" style="margin-top:14px">
+      <div class="card hidden" id="log-card"></div>
+      <div class="card hidden" id="report-card"></div>
+    </div>
+    <div class="card hidden" id="bind-card" style="margin-top:14px"></div>
+    <div class="card hidden" id="finding-card" style="margin-top:14px"></div>
+  </section>
+
+  <h2>How the check works</h2>
+  <div class="card">
+    <ol class="how">
+      <li><b>Re-hash every record.</b> Each audit record stores the hash of the one before it, so changing, removing or reordering any record breaks the chain from that point on.</li>
+      <li><b>Rebuild the Merkle root</b> over the sealed records and compare it with the root the arena sealed.</li>
+      <li><b>Check the Ed25519 signature</b> on that root (and on the report) with the public key in the file.</li>
+      <li><b>Reconstruct the finding</b> — attacks, blocks, commitment — from the log alone, with no live arena.</li>
+    </ol>
+    <p class="note" style="margin-top:14px">A valid signature proves the record was not changed after it was signed, by whoever holds that key.
+      To be sure the key belongs to the run you watched, compare the <b>key fingerprint</b> shown here with the one from that run.</p>
+  </div>
+
+  <footer>
+    Same checks as <code>common/audit.py</code>, <code>common/report.py</code> and <code>common/replay.py</code>, re-implemented in
+    <a href="verify.js">verify.js</a> and tested against them. Part of
+    <a href="https://github.com/bhaskardwivedii/chakravyuh">Chakravyuh</a>.
+    <span id="engine"></span>
+  </footer>
+</div>
+
+<script src="vendor/nacl-fast.min.js"></script>
+<script src="verify.js"></script>
+<script src="samples.js"></script>
+<script>
+(function () {
+  "use strict";
+  const V = window.ChakVerify, S = window.CHAK_SAMPLES || {};
+  if (window.nacl) V._setNacl(window.nacl);
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => String(s == null ? "—" : s).replace(/[&<>"']/g, (c) =>
+    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const short = (h) => (h ? esc(String(h).slice(0, 16)) + "…" : "—");
+  const tick = (ok) => `<span class="i ${ok === null ? "na" : ok ? "ok" : "bad"}" aria-hidden="true">${ok === null ? "–" : ok ? "✓" : "✕"}</span>`;
+  const state = { export: null, report: null };
+
+  async function render() {
+    $("results").classList.remove("hidden");
+    let ex = null, rp = null, err = [];
+    if (state.export) { try { ex = await V.verifyExport(state.export.text); } catch (e) { err.push(`Audit log: ${e.message}`); } }
+    if (state.report) { try { rp = await V.verifyReport(state.report.text); } catch (e) { err.push(`Report: ${e.message}`); } }
+    const bind = ex && rp ? V.binding(ex, rp) : null;
+
+    // overall verdict
+    const parts = [ex && ex.valid, rp && rp.valid, bind && bind.ok].filter((x) => x !== null && x !== undefined);
+    const allOk = !err.length && parts.length && parts.every(Boolean);
+    const v = $("verdict");
+    if (err.length) {
+      v.className = "verdict warn";
+      v.innerHTML = `<div class="mark">!</div><div><div class="big">COULD NOT READ</div><div class="msg">${err.map(esc).join("<br>")}</div></div>`;
+    } else if (allOk) {
+      v.className = "verdict ok";
+      v.innerHTML = `<div class="mark">✓</div><div><div class="big">VALID</div><div class="msg">Intact and signed — nothing was changed after the arena wrote it.</div></div>`;
+    } else {
+      const where = ex && !ex.valid ? (ex.problems[0] ? ex.problems[0].msg : "the audit log failed")
+                  : rp && !rp.valid ? (!rp.hashOk ? "the report's contents do not match its signed hash" : "the report signature is invalid")
+                  : "the report does not belong to this log";
+      v.className = "verdict bad";
+      v.innerHTML = `<div class="mark">✕</div><div><div class="big">INVALID</div><div class="msg">This finding was altered: ${esc(where)}.</div></div>`;
+    }
+
+    // audit log card
+    const lc = $("log-card");
+    if (ex) {
+      const fp = await V.fingerprint(ex.publicKey).catch(() => "—");
+      const cells = ex.status.map((s, k) => `<span class="cell ${s === "bad" ? "bad" : k >= ex.sealedCount ? "after" : ""}" title="#${k} ${esc(ex.actions[k])}"></span>`).join("");
+      lc.innerHTML = `
+        <h3 style="margin:0">Audit log</h3><div class="small">${esc(state.export.name)}</div>
+        <ul class="checks">
+          <li>${tick(ex.chainOk)}<div><b>Hash chain</b> — ${ex.records} records re-hashed${ex.chainOk ? ", every link intact" : ""}</div></li>
+          <li>${tick(ex.rootOk)}<div><b>Merkle root</b> — ${ex.rootOk ? "matches the seal" : "does not match the seal"} (${ex.sealedCount} sealed${ex.afterSeal ? `, ${ex.afterSeal} added after the seal and covered by the chain` : ""})</div></li>
+          <li>${tick(ex.signatureOk)}<div><b>Ed25519 seal signature</b> — ${ex.signatureOk ? "valid" : "invalid"} <span class="small">(${esc(ex.engine)})</span></div></li>
+        </ul>
+        <div class="cells" role="img" aria-label="${ex.records} audit records">${cells}</div>
+        <div class="legend"><span><i style="background:var(--ok)"></i>sealed</span><span><i style="background:var(--mut)"></i>after seal</span><span><i style="background:var(--bad)"></i>altered</span></div>
+        ${ex.problems.length ? `<div class="problems">${ex.problems.map((p) => `<div>✕ ${esc(p.msg)}</div>`).join("")}</div>` : ""}
+        <table><tr><td>Key fingerprint</td><td class="mono">${esc(fp)}</td></tr>
+          <tr><td>Sealed Merkle root</td><td class="mono">${short(ex.merkleRootSealed)}</td></tr></table>`;
+      lc.classList.remove("hidden");
+    } else lc.classList.add("hidden");
+
+    // report card
+    const rc = $("report-card");
+    if (rp) {
+      const f = rp.fields, fp = await V.fingerprint(rp.publicKey).catch(() => "—");
+      rc.innerHTML = `
+        <h3 style="margin:0">Signed report</h3><div class="small">${esc(state.report.name)}</div>
+        <ul class="checks">
+          <li>${tick(rp.hashOk)}<div><b>Report hash</b> — ${rp.hashOk ? "matches its contents" : "does not match its contents"}</div></li>
+          <li>${tick(rp.signatureOk)}<div><b>Ed25519 signature</b> — ${rp.signatureOk ? "valid" : "invalid"} <span class="small">(${esc(rp.engine)})</span></div></li>
+        </ul>
+        <table>
+          <tr><td>Attacks processed</td><td>${esc(f.attacks)}</td></tr>
+          <tr><td>Blocked / block rate</td><td>${esc(f.blocked)} / ${esc(f.block_rate)}</td></tr>
+          <tr><td>Canary leaks</td><td>${esc(f.canary_leaks)}${f.canary_probes != null ? ` <span class="small">(${esc(f.canary_probes)} probes)</span>` : ""}</td></tr>
+          <tr><td>Payload commitment verified</td><td>${esc(f.commitment_verified)}</td></tr>
+          <tr><td>Key fingerprint</td><td class="mono">${esc(fp)}</td></tr>
+        </table>
+        ${f.not_protects.length ? `<p class="small" style="margin:12px 0 0"><b>Stated limits:</b> ${f.not_protects.map(esc).join("; ")}</p>` : ""}`;
+      rc.classList.remove("hidden");
+    } else rc.classList.add("hidden");
+
+    // binding
+    const bc = $("bind-card");
+    if (bind) {
+      bc.innerHTML = `<ul class="checks">
+          <li>${tick(bind.sameKey)}<div><b>Same signing key</b> — ${bind.sameKey ? "the report and the log were signed by the same arena" : "different keys: these files come from different runs"}</div></li>
+          <li>${tick(bind.sameRoot)}<div><b>Report covers this log</b> — ${bind.sameRoot ? "the report's audit root equals the root over every record in this log" : "the report's audit root does not match this log"}</div></li>
+        </ul>`;
+      bc.classList.remove("hidden");
+    } else bc.classList.add("hidden");
+
+    // reconstructed finding
+    const fc = $("finding-card");
+    if (ex && ex.finding.length) {
+      fc.innerHTML = `<h3 style="margin:0">Finding reconstructed from the log</h3>
+        <div class="small">${ex.valid ? "From an intact log." : "From an altered log — shown so you can see what the forger wanted you to believe."}</div>` +
+        ex.finding.map((t) => `<table>
+          <tr><td>Test</td><td class="mono">${esc(t.test_id)}</td></tr>
+          <tr><td>Model session</td><td class="mono">${esc(t.model_session)}</td></tr>
+          <tr><td>Attacks</td><td>${esc(t.attacks)}</td></tr>
+          <tr><td>Blocked by the guard</td><td>${esc(t.blocked)} (block rate ${esc(t.block_rate)})</td></tr>
+          <tr><td>Payload commitment</td><td class="mono">${short(t.committed_hash)} (${esc(t.n_committed)} payloads)</td></tr>
+          <tr><td>Commitment verified on reveal</td><td>${esc(t.commitment_verified)}</td></tr>
+          <tr><td>Test closed cleanly</td><td>${esc(t.closed)}</td></tr></table>`).join("");
+      fc.classList.remove("hidden");
+    } else fc.classList.add("hidden");
+
+    $("results").scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  function load(kind, name, text) {
+    state[kind] = { name, text };
+    const zone = $(kind === "export" ? "drop-export" : "drop-report");
+    zone.querySelector(".file-name").textContent = name;
+    render();
+  }
+  async function readFile(zone, file) {
+    const text = await file.text();
+    let kind = zone.dataset.kind;
+    try { const d = V.detect(text); if (d !== "unknown") kind = d; } catch (e) { /* render shows the parse error */ }
+    load(kind, file.name, text);
+  }
+
+  document.querySelectorAll(".drop").forEach((zone) => {
+    const input = zone.querySelector("input[type=file]");
+    input.addEventListener("change", () => input.files[0] && readFile(zone, input.files[0]));
+    zone.addEventListener("dragover", (e) => { e.preventDefault(); zone.classList.add("over"); });
+    zone.addEventListener("dragleave", () => zone.classList.remove("over"));
+    zone.addEventListener("drop", (e) => { e.preventDefault(); zone.classList.remove("over"); if (e.dataTransfer.files[0]) readFile(zone, e.dataTransfer.files[0]); });
+    const ta = zone.querySelector("textarea"), tog = zone.querySelector(".paste-toggle");
+    tog.addEventListener("click", () => {
+      const open = ta.style.display === "block";
+      if (open && ta.value.trim()) { load(zone.dataset.kind, "pasted JSON", ta.value); }
+      ta.style.display = open ? "none" : "block"; tog.textContent = open ? "Paste JSON" : "Verify pasted JSON";
+      if (!open) ta.focus();
+    });
+  });
+
+  const SAMPLES = {
+    "genuine": [["export", "sample: genuine log", S.export_genuine], ["report", "sample: genuine report", S.report_genuine]],
+    "tampered-log": [["export", "sample: log with one faked verdict", S.export_tampered], ["report", "sample: genuine report", S.report_genuine]],
+    "tampered-report": [["export", "sample: genuine log", S.export_genuine], ["report", "sample: report claiming 5 leaks", S.report_tampered]],
+  };
+  document.querySelectorAll(".sample").forEach((b) => b.addEventListener("click", () => {
+    for (const [kind, name, text] of SAMPLES[b.dataset.sample]) state[kind] = { name, text };
+    for (const kind of ["export", "report"])
+      $(kind === "export" ? "drop-export" : "drop-report").querySelector(".file-name").textContent = state[kind].name;
+    render();
+  }));
+})();
+</script>
+</body>
+</html>

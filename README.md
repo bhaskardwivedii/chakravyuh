@@ -1,5 +1,9 @@
 # Chakravyuh
 
+[![tests](https://github.com/bhaskardwivedii/chakravyuh/actions/workflows/tests.yml/badge.svg)](https://github.com/bhaskardwivedii/chakravyuh/actions/workflows/tests.yml)
+[![arena](https://github.com/bhaskardwivedii/chakravyuh/actions/workflows/arena.yml/badge.svg)](https://github.com/bhaskardwivedii/chakravyuh/actions/workflows/arena.yml)
+[![verify in browser](https://img.shields.io/badge/verify-in%20your%20browser-5b8cff)](https://bhaskardwivedii.github.io/chakravyuh/verify/)
+
 **A sealed multi-tenant arena for trustworthy adversarial AI-safety testing.**
 Hack in Hills '26 · Track 04 — *Securing Adversarial AI Safety Testing
 Infrastructure (Bayora)*
@@ -78,6 +82,25 @@ run Ollama (`ollama serve` with `llama3.2:1b`) and set `OLLAMA_URL` on the
 
 ---
 
+## Verify a finding yourself
+
+Every run ends with a signed report and a hash-chained audit log. You don't have
+to trust our scorecard: open the **[browser verifier](https://bhaskardwivedii.github.io/chakravyuh/verify/)**,
+drop in `/tmp/chakravyuh_report.json` and `/tmp/chakravyuh_export.json` from your own
+run (or the files attached to any [arena CI run](https://github.com/bhaskardwivedii/chakravyuh/actions/workflows/arena.yml)),
+and it re-hashes every record, rebuilds the Merkle root, checks both Ed25519
+signatures and reconstructs the finding — entirely client-side, nothing uploaded.
+The built-in samples include a tampered log; the page names the exact record that
+was changed.
+
+```bash
+# same checks from the command line, and the verifier's own tests
+node tests/verifier/check_files.js /tmp/chakravyuh_export.json /tmp/chakravyuh_report.json
+node --test tests/verifier/verify.test.js   # byte-for-byte parity with common/audit.py
+```
+
+The page also works offline: open `docs/verify/index.html` directly.
+
 ## Architecture
 
 Five layers — **isolate, segment, broker, record, observe**. Red has no network
@@ -153,6 +176,9 @@ scripts/       demo.sh (demo + signed scorecard + replay), benchmark.sh (leakage
 tests/         41 pytest cases: audit, commit-reveal, policy, tokens, padding,
                timing channel, signed report, token gating, evaluation, replay, e2e
 docs/          OBJECTIVES.md, THREAT_MODEL.md, RESULTS.md, architecture.svg
+docs/verify/   browser verifier (GitHub Pages): verify.js, samples from a real run
+tests/verifier/  verifier parity tests against the Python implementation
+.github/       CI: tests.yml (pytest + verifier), arena.yml (full Docker run)
 docker-compose.yml           hardened arena
 docker-compose.insecure.yml  insecure baseline (for the benchmark)
 ```
